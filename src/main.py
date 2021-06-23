@@ -1,4 +1,5 @@
 from transformers.data.data_tf_collator import TFDataCollatorForLanguageModeling
+from transformers.data.data_collator import DataCollatorForLanguageModeling
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -10,6 +11,8 @@ import tokenizers
 from tokenizers import Tokenizer
 from tokenizers.models import WordPiece
 from tokenizers import normalizers
+
+from transformers.tokenization_utils_base import BatchEncoding
 
 from tokenizers.normalizers import (
     Lowercase,
@@ -45,6 +48,8 @@ class PrimeTokenizer:
         )
 
         self.prime_tokenizer.decoder = decoders.WordPiece()
+        # self.prime_tokenizer.enable_padding(length=max_seq_length)
+        # self.prime_tokenizer.enable_truncation(max_seq_length)
 
     def text_to_sequence(self, input_):
         if type(input_) is list:
@@ -58,6 +63,8 @@ class PrimeTokenizer:
 
     def train(self, data):
         log_itr = iter(data)
+        #         tqdm_log_itr = tqdm(iterable=log_itr, total=len(data))
+        # tqdm_log_itr.__iter__()
         self.prime_tokenizer.train_from_iterator(log_itr, self.trainer)
         self.save()
 
@@ -92,20 +99,31 @@ if __name__ == "__main__":
     fast_tokenizer.mask_token = "[MASK]"
     batch_encodings = fast_tokenizer(corpus, truncation=True, padding=True)
     batch = tokenizer.text_to_sequence(corpus)
-    batch_ids = [list(range(10)), list(range(5)), list(range(8)), list(range(2))]
+    batch_ids = [list(range(10)), list(range(10))]
+
+    data_set_tf = tf.data.Dataset.from_tensor_slices(batch_ids)
 
     tf_data_collator = TFDataCollatorForLanguageModeling(fast_tokenizer)
+    data_collator = DataCollatorForLanguageModeling(fast_tokenizer, pad_to_multiple_of=20)
 
     PAD_TOKEN = 3
 
-    dataset_tf = tf.data.Dataset.from_generator(
-        lambda: batch_ids, tf.int32, output_shapes=None)
+    output_torch = data_collator(batch_ids)
+
     output_tf = (
-        dataset_tf
-        .padded_batch(2,
-                      padded_shapes=10,
-                      padding_values=3)
+        data_set_tf
+        .padded_batch(batch_size=10, padded_shapes=20, padding_values=PAD_TOKEN)
         .map(tf_data_collator)
     )
 
+    output_tf2 = (
+        data_set_tf
+        .map(lambda x: x+10)
+    )
+
+    # for step, batch in enumerate(output):
+    #     print(batch['input_ids'].numpy())
+
+    # print(output._input_dataset._input_dataset)
     print(list(output_tf.as_numpy_iterator()))
+    print(output_torch)
